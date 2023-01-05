@@ -18,10 +18,10 @@
       files = ["utils.py"]
       [[fetch]]
       from = "https://raw.githubusercontent.com/lauriaclarke/NHNTpython/main/frontend/"
-      files = ["todo.py"]
+      files = ["rxonly.py"]
     </py-config>
     <py-script>
-        from todo import add_task, add_task_event
+        from rxonly import stopButton, startButton
     </py-script>
     <section>
       <div class="text-center w-full mb-8">
@@ -35,17 +35,7 @@
         <button id="new-task-btn" class="py-button" type="submit" py-click="stopButton()">
           Stop
         </button>
-
       </div>
-      <div id="list-tasks-container" class="flex flex-col-reverse mt-4"></div>
-      <template id="task-template">
-        <section class="task py-li-element">
-          <label for="flex items-center p-2 ">
-            <input class="mr-2" type="checkbox">
-            <p class="m-0 inline"></p>
-          </label>
-        </section>
-      </template>
     </section>    
   </body>
 </html>

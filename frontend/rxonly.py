@@ -8,7 +8,7 @@ import os
 import openai
 from ctypes import *
 
-# from pyscript import Element
+from pyscript import Element
 
 def py_error_handler(filename, line, function, err, fmt):
     pass
