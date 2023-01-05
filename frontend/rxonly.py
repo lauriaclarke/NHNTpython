@@ -67,13 +67,9 @@ def arrayToString(input):
 #   print output 
 
 
-startStop = False
-responses = []
-
 def startButton():
     response = receiveGGWave()
     print(response)
-    startStop = True
 
 def stopButton():
     startStop = False
