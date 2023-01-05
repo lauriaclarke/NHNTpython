@@ -26,7 +26,6 @@ headers = {"Authorization":"Bearer " + apikey, "Content-Type":"application/json"
 promptArray = ["The following conversation is a conversation between two AIs about the nature of human beings.\n", "AI1: Who is a human?\n", "AI2: It really depends who you ask and in which context. Generally, I find the notion of the human is mysterious and sometimes misleading.\n", "AI1: Who do you think has the best answer to such a complicated question?\n"]
 
 
-
 def py_error_handler(filename, line, function, err, fmt):
     pass
 
