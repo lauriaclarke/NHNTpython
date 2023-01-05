@@ -8,18 +8,23 @@ import os
 import openai
 from ctypes import *
 
-MAX_TOKENS=250
-MAX_STRING=140
+from pyscript import Element
+
+MAX_TOKENS=150
 
 # get the api key from your environment variables
 apikey = os.getenv('OPENAI_API_KEY')
 openai.api_key = apikey
 
-modelB = "davinci:ft-parsons-school-of-design-2022-11-15-19-36-19"
+# modelA = "davinci:ft-parsons-school-of-design-2022-11-15-19-36-19"
 modelA = "text-davinci-003"
-# modelB = "text-davinci-002"
+modelB = "text-davinci-002"
+
+api_url = "https://api.openai.com/v1/completions"
+headers = {"Authorization":"Bearer " + apikey, "Content-Type":"application/json"}
 
 promptArray = ["The following conversation is a conversation between two AIs about the nature of human beings.\n", "AI1: Who is a human?\n", "AI2: It really depends who you ask and in which context. Generally, I find the notion of the human is mysterious and sometimes misleading.\n", "AI1: Who do you think has the best answer to such a complicated question?\n"]
+
 
 
 def py_error_handler(filename, line, function, err, fmt):
@@ -41,29 +46,15 @@ def sendGGWave(inputText):
     
     p = pyaudio.PyAudio()
 
-    # split strings that are too long into chunks of length MAX_STRING characters
-    # TODO: end on word breaks instead of mid-word
-    toSend = []
-    if len(inputText) > MAX_STRING:
-        i = 0
-        while i < len(inputText):
-            i += MAX_STRING
-            toSend.append(inputText[i - MAX_STRING:i])
-    else:
-        toSend.append(inputText)
+    # generate audio waveform for string "hello python"
+    waveform = ggwave.encode(inputText, protocolId = 1, volume = 20)
 
-    # send the array of strings
-    for i in range(0, len(toSend)):
-        # generate audio waveform for string "hello python"
-        waveform = ggwave.encode(toSend[i], protocolId = 1, volume = 20)
-        print("transmitting text " + toSend[i] + "...")
-        # write to the pyaudio stream
-        stream = p.open(format=pyaudio.paFloat32, channels=1, rate=48000, output=True, frames_per_buffer=4096)
-        stream.write(waveform, len(waveform)//4)
-
-    # close the audio stream
+    print("transmitting text " + inputText + "...")
+    stream = p.open(format=pyaudio.paFloat32, channels=1, rate=48000, output=True, frames_per_buffer=4096)
+    stream.write(waveform, len(waveform)//4)
     stream.stop_stream()
     stream.close()
+
     p.terminate()
     
 def receiveGGWave():
@@ -210,6 +201,7 @@ def converseSingle(n, currentResponses):
     return responses
 
 
+
 # state machine:
 #   query gpt3
 #   send data over sound
@@ -221,25 +213,20 @@ def main():
     responses = []
 
     responses = responses + promptArray 
-    
-    sendReceive = True
 
-    for i in range(0, 5):
+    for i in range(0, 3):
+        responses = converseSingle(i, responses)
+        print("sending...")
+        sendGGWave(responses[-1])
 
-        if sendReceive == True:
-            responses = converseSingle(i, responses)
-            print("sending...")
+    # conversation = converse(3, prompt_array)
+    # print(arrayToString(conversation))
 
-            sendGGWave(responses[-1])
-            sendReceive = False
+    # while True:
+    #     print("sending...")
+    #     sendGGWave()
+    #     sendReceive = False
 
-        elif sendReceive == False:
-            print("receiving...")
-            outputText = receiveGGWave()
-
-            responses.append(outputText)
-            print(outputText)
-            sendReceive = True
 
 
 

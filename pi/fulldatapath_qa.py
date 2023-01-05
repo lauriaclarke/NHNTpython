@@ -15,11 +15,11 @@ MAX_STRING=140
 apikey = os.getenv('OPENAI_API_KEY')
 openai.api_key = apikey
 
-modelB = "davinci:ft-parsons-school-of-design-2022-11-15-19-36-19"
-modelA = "text-davinci-003"
+# modelB = "davinci:ft-parsons-school-of-design-2022-11-15-19-36-19"
+modelB = "text-davinci-003"
 # modelB = "text-davinci-002"
 
-promptArray = ["The following conversation is a conversation between two AIs about the nature of human beings.\n", "AI1: Who is a human?\n", "AI2: It really depends who you ask and in which context. Generally, I find the notion of the human is mysterious and sometimes misleading.\n", "AI1: Who do you think has the best answer to such a complicated question?\n"]
+promptArray = ["The following conversation is between an AI and a human. The AI knows a lot about computers and what it means to be human.\n", "Human: Who is a human?\n"]
 
 
 def py_error_handler(filename, line, function, err, fmt):
@@ -112,48 +112,39 @@ def converseLoop(n_exchange, starterPrompt):
 
     print(prompt)
 
-    # loop will iterate for duration of conversation
-    for x in range(n_exchange):
-        # print("\n---------------------------------------------------------\n")
-        # switch between model and prompts
-        if x % 2 == 0:
-            model = modelB
-            preprompt = "AI2: "
-            stop = ["AI1: "]
-        else:
-            model = modelA
-            preprompt = "AI1: "
-            stop = ["AI2: ", "."]
-        
-        # add the empty preprompt with newline to the response list
-        responses.append(preprompt + "\n")
+    model = modelB
+    preprompt = "AI: "
+    stop = ["."]
+    
+    # add the empty preprompt with newline to the response list
+    responses.append(preprompt + "\n")
 
-        # turn the array of responses into a long string
-        prompt = arrayToString(responses)
+    # turn the array of responses into a long string
+    prompt = arrayToString(responses)
 
-        # for modelB use the entire prompt, for modelA only the last two responses 
-        if x % 2 == 0:
-          prompt = arrayToString(responses)
-        else:
-          prompt = arrayToString(responses[-2] + responses[-1])
+    # for modelB use the entire prompt, for modelA only the last two responses 
+    if x % 2 == 0:
+      prompt = arrayToString(responses)
+    else:
+      prompt = arrayToString(responses[-2] + responses[-1])
 
-        # print("\n** " + model + ": " + prompt + " **\n")
-        
-        # get the completion from model
-        completion = openai.Completion.create(engine=model, prompt=prompt, max_tokens=100, stop=stop)
+    # print("\n** " + model + ": " + prompt + " **\n")
+    
+    # get the completion from model
+    completion = openai.Completion.create(engine=model, prompt=prompt, max_tokens=100, stop=stop)
 
-        responseString = completion.choices[0].text.strip()
-        
-        # add the preprompt to the response and make sure it has a new line 
-        fullResponse = preprompt + responseString + "\n"
+    responseString = completion.choices[0].text.strip()
+    
+    # add the preprompt to the response and make sure it has a new line 
+    fullResponse = preprompt + responseString + "\n"
 
-        # remove the empty preprompt from the list
-        responses.pop()
-        
-        # add the formatted string to the list
-        responses.append(fullResponse)
-        
-        print(fullResponse)
+    # remove the empty preprompt from the list
+    responses.pop()
+    
+    # add the formatted string to the list
+    responses.append(fullResponse)
+    
+    print(fullResponse)
 
     return responses
 
@@ -168,14 +159,9 @@ def converseSingle(n, currentResponses):
     print(prompt)
 
     # switch between model and prompts
-    if n % 2 == 0:
-        model = modelB
-        preprompt = "AI2: "
-        stop = ["AI1: "]
-    else:
-        model = modelA
-        preprompt = "AI1: "
-        stop = ["AI2: ", "."]
+    model = modelB
+    preprompt = "AI: "
+    stop = ["Human: ", "."]
     
     # add the empty preprompt with newline to the response list
     responses.append(preprompt + "\n")
@@ -184,10 +170,10 @@ def converseSingle(n, currentResponses):
     prompt = arrayToString(responses)
 
     # for modelB use the entire prompt, for modelA only the last two responses 
-    if n % 2 == 0:
-      prompt = arrayToString(responses)
-    else:
-      prompt = arrayToString(responses[-2] + responses[-1])
+    # if n % 2 == 0:
+    #   prompt = arrayToString(responses)
+    # else:
+    prompt = arrayToString(responses[-2] + responses[-1])
     
     # print("\n** " + model + ": " + prompt + " **\n")
     
@@ -205,7 +191,7 @@ def converseSingle(n, currentResponses):
     # add the formatted string to the list
     responses.append(fullResponse)
     
-    # print(fullResponse)
+    print(fullResponse)
 
     return responses
 
@@ -224,7 +210,10 @@ def main():
     
     sendReceive = True
 
-    for i in range(0, 5):
+    for i in range(0, 10):
+        
+        # print(responses)
+        # print(arrayToString(responses))
 
         if sendReceive == True:
             responses = converseSingle(i, responses)
