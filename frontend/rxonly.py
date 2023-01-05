@@ -71,18 +71,20 @@ startStop = False
 responses = []
 
 def startButton():
+    response = receiveGGWave()
+    print(response)
     startStop = True
 
 def stopButton():
     startStop = False
 
-while startStop == True:
-    while len(responses) < 3:
-    responses.append(receiveGGWave())
-    if len(responses) > 0:
-        print(responses[-1])
-    else:
-        print("no response has been recorded")
+# while startStop == True:
+#     while len(responses) < 3:
+#     responses.append(receiveGGWave())
+#     if len(responses) > 0:
+#         print(responses[-1])
+#     else:
+#         print("no response has been recorded")
 
 
 
