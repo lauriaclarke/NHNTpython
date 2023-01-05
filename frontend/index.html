@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
 
-  <title>My Todo</title>
+  <title>NHNT Test Application</title>
 
   <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css" />
   <script defer src="https://pyscript.net/latest/pyscript.js"></script>
@@ -19,7 +19,10 @@
       [[fetch]]
       from = "https://raw.githubusercontent.com/lauriaclarke/NHNTpython/main/frontend/"
       files = ["rxonly.py"]
-    </py-config>
+    </py-config>  
+    <py-env>
+      - ggwave
+    </py-env>
     <py-script>
         from rxonly import stopButton, startButton
     </py-script>
