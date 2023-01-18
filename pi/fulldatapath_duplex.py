@@ -5,21 +5,23 @@ import json
 import re
 import inspect
 import os
+import sys
 import openai
 from ctypes import *
 
-MAX_TOKENS=250
+MAX_TOKENS=100
 MAX_STRING=140
 
 # get the api key from your environment variables
 apikey = os.getenv('OPENAI_API_KEY')
 openai.api_key = apikey
 
-modelB = "davinci:ft-parsons-school-of-design-2022-11-15-19-36-19"
+# modelB = "davinci:ft-parsons-school-of-design-2022-11-15-19-36-19"
 modelA = "text-davinci-003"
-# modelB = "text-davinci-002"
+# modelB = "text-davinci-003"
 
-promptArray = ["The following conversation is a conversation between two AIs about the nature of human beings.\n", "AI1: Who is a human?\n", "AI2: It really depends who you ask and in which context. Generally, I find the notion of the human is mysterious and sometimes misleading.\n", "AI1: Who do you think has the best answer to such a complicated question?\n"]
+# promptArray = ["The following conversation is a conversation between two AIs about the nature of human beings.\n", "AI1: Who is a human?\n", "AI2: It really depends who you ask and in which context. Generally, I find the notion of the human is mysterious and sometimes misleading.\n", "AI1: Who do you think has the best answer to such a complicated question?\n"]
+promptArray = ["AI1: Who is a human?\n"]
 
 
 def py_error_handler(filename, line, function, err, fmt):
@@ -37,8 +39,9 @@ def alsaErrorHandling():
 
 def sendGGWave(inputText):
     # suppress alsa errors
-    alsaErrorHandling()
+    # alsaErrorHandling()
     
+    print(inputText)
     p = pyaudio.PyAudio()
 
     # split strings that are too long into chunks of length MAX_STRING characters
@@ -51,6 +54,8 @@ def sendGGWave(inputText):
             toSend.append(inputText[i - MAX_STRING:i])
     else:
         toSend.append(inputText)
+
+    print(toSend)
 
     # send the array of strings
     for i in range(0, len(toSend)):
@@ -69,7 +74,7 @@ def sendGGWave(inputText):
 def receiveGGWave():
     p = pyaudio.PyAudio()
 
-    stream = p.open(format=pyaudio.paFloat32, channels=1, rate=48000, input=True, frames_per_buffer=1024)
+    stream = p.open(format=pyaudio.paFloat32, input_device_index=1, channels=1, rate=48000, input=True, frames_per_buffer=1024)
 
     print('listening ... Press Ctrl+C to stop')
     instance = ggwave.init()
@@ -168,15 +173,19 @@ def converseSingle(n, currentResponses):
     print(prompt)
 
     # switch between model and prompts
-    if n % 2 == 0:
-        model = modelB
-        preprompt = "AI2: "
-        stop = ["AI1: "]
-    else:
-        model = modelA
-        preprompt = "AI1: "
-        stop = ["AI2: ", "."]
-    
+    # if n % 2 == 0:
+    #     model = modelB
+    #     preprompt = "AI2: "
+    #     stop = ["AI1: "]
+    # else:
+    #     model = modelA
+    #     preprompt = "AI1: "
+    #     stop = ["AI2: ", "."]
+
+    model = modelA
+    preprompt = "AI1: "
+    stop = ["AI2: ", "."]
+
     # add the empty preprompt with newline to the response list
     responses.append(preprompt + "\n")
 
@@ -209,6 +218,31 @@ def converseSingle(n, currentResponses):
 
     return responses
 
+def waitForStart():
+    print("waiting for start command...")
+    if(receiveGGWave() == "start"):
+        pass
+
+def rxtxrxTest():
+    outputText = receiveGGWave()
+    print(outputText)
+    sendGGWave("howdy I'm a raspberry pi")
+    outputText = receiveGGWave()
+
+def parseArgs():
+    if(len(sys.argv) > 1):
+        args = sys.argv[1:]
+        print(args)
+        if(args[0] == "send"):
+            print("starting in SEND mode")
+            return True
+        elif(args[0] == "recieve"):
+            print("starting in RECEIVE mode")
+            return False
+    else:
+        print("couldn't parse argument, starting in RECEIVE mode")
+        return False
+    
 
 # state machine:
 #   query gpt3
@@ -216,30 +250,39 @@ def converseSingle(n, currentResponses):
 #   listen
 #   receive data over sound
 
-def main():
+def main(): 
+    alsaErrorHandling()
 
-    responses = []
-
-    responses = responses + promptArray 
+    sendReceive = parseArgs()
     
-    sendReceive = True
+    waitForStart()
 
-    for i in range(0, 5):
+    rxtxrxTest()
 
-        if sendReceive == True:
-            responses = converseSingle(i, responses)
-            print("sending...")
+    # responses = []
 
-            sendGGWave(responses[-1])
-            sendReceive = False
+    # responses = responses + promptArray 
 
-        elif sendReceive == False:
-            print("receiving...")
-            outputText = receiveGGWave()
+    # # sendReceive = True
 
-            responses.append(outputText)
-            print(outputText)
-            sendReceive = True
+    # for i in range(0, 5):
+
+    #     if sendReceive == True:
+    #         responses = converseSingle(i, responses)
+    #         print("\nsending...\n")
+    #         print(responses)
+    #         sendGGWave(responses[-1])
+    #         sendReceive = False
+
+    #     elif sendReceive == False:
+    #         print("\nreceiving...\n")
+    #         outputText = receiveGGWave()
+
+    #         responses.append(outputText)
+    #         print(outputText)
+    #         sendReceive = True
+    
+
 
 
 

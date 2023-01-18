@@ -2,12 +2,14 @@ import pyaudio
 import wave
 from ctypes import *
 
-chunk = 1024  # Record in chunks of 1024 samples
-sample_format = pyaudio.paInt16  # 16 bits per sample
+chunk = 256  # Record in chunks of 1024 samples
+sample_format = pyaudio.paFloat32  # 16 bits per sample
 channels = 1
 fs = 48000  # Record at 44100 samples per second
 seconds = 3
-filename = "output.wav"
+# filename = "output.wav"
+filename = "/usr/share/sounds/alsa/Front_Center.wav"
+
 
 def recordSound(p):
     # p = pyaudio.PyAudio()  # Create an interface to PortAudio
@@ -17,7 +19,6 @@ def recordSound(p):
     stream = p.open(format=sample_format,
                     channels=channels,
                     rate=fs,
-                    input_device_index = 0,
                     frames_per_buffer=chunk,
                     input=True)
 
@@ -67,7 +68,8 @@ def playSound(p):
     # Close and terminate the stream
     stream.stop_stream()
     stream.close()
-    
+    # p.terminate()
+
     print("Finished Play Back")
 
 def py_error_handler(filename, line, function, err, fmt):
@@ -86,10 +88,7 @@ def alsaErrorHandling():
 def main():
     alsaErrorHandling()
     p = pyaudio.PyAudio()
-    recordSound(p)
-    # playSound(p)
-    # recordSound(p)
-    # playSound(p)
+    playSound(p)
     p.terminate()
 
 

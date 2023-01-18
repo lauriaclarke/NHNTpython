@@ -3,16 +3,16 @@ import pyaudio
 
 p = pyaudio.PyAudio()
 
-stream = p.open(format=pyaudio.paFloat32, channels=1, rate=48000, input=True, frames_per_buffer=1024)
+stream = p.open(format=pyaudio.paFloat32, input_device_index=0, channels=1, rate=48000, input=True, frames_per_buffer=1024)
 
 print('Listening ... Press Ctrl+C to stop')
 instance = ggwave.init()
+print(instance)
 
 try:
     while True:
         data = stream.read(1024, exception_on_overflow=False)
-        print(type(data))
-        print(len(data))
+        print(data)
         res = ggwave.decode(instance, data)
         if (not res is None):
             try:
