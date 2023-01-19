@@ -8,21 +8,59 @@ import os
 import sys
 import openai
 from ctypes import *
+import ggwave
+import numpy as np
+import sounddevice as sd
+import time
 
-MAX_TOKENS=100
+MAX_TOKENS=200
 MAX_STRING=140
+
+# computer settings
+# OUTPUT_DEVICE=25
+# INPUT_DEVICE=25
+
+# pi settings
+OUTPUT_DEVICE=0
+INPUT_DEVICE=1
+
+EXCHANGE_COUNT=10
 
 # get the api key from your environment variables
 apikey = os.getenv('OPENAI_API_KEY')
 openai.api_key = apikey
 
-# modelB = "davinci:ft-parsons-school-of-design-2022-11-15-19-36-19"
-modelA = "text-davinci-003"
-# modelB = "text-davinci-003"
+modelReceive = "davinci:ft-parsons-school-of-design-2022-11-15-19-36-19"
+modelSend = "text-davinci-003"
+# model = "text-davinci-003"
+    
+stop = ["."]
 
 # promptArray = ["The following conversation is a conversation between two AIs about the nature of human beings.\n", "AI1: Who is a human?\n", "AI2: It really depends who you ask and in which context. Generally, I find the notion of the human is mysterious and sometimes misleading.\n", "AI1: Who do you think has the best answer to such a complicated question?\n"]
-promptArray = ["AI1: Who is a human?\n"]
+promptArray = ["Who is a human?\n"]
 
+def arrayToString(input):
+    output = ""
+    for x in input:
+        output = output + x
+    return output 
+
+def getMessagePart(inputText):
+    partRegex = re.compile(r'(\d)[/](\d)') 
+    regexOut = partRegex.search(inputText)
+
+    if regexOut == None:
+        print("no message marker")
+        return 1, 1, inputText
+    else:
+        # extract the message number and and number of parts 
+        msgNumber = regexOut.group(1)
+        msgParts = regexOut.group(2)
+    
+        # strip the part numbers from the message
+        messageText = re.sub('\d[/]\d:', '', inputText)
+    
+        return msgNumber, msgParts, messageText
 
 def py_error_handler(filename, line, function, err, fmt):
     pass
@@ -38,14 +76,12 @@ def alsaErrorHandling():
     asound.snd_lib_error_set_handler(c_error_handler)
 
 def sendGGWave(inputText):
-    # suppress alsa errors
-    # alsaErrorHandling()
-    
-    print(inputText)
-    p = pyaudio.PyAudio()
-
     # split strings that are too long into chunks of length MAX_STRING characters
     # TODO: end on word breaks instead of mid-word
+    
+    # print(inputText)
+    # print(len(inputText))
+
     toSend = []
     if len(inputText) > MAX_STRING:
         i = 0
@@ -55,57 +91,104 @@ def sendGGWave(inputText):
     else:
         toSend.append(inputText)
 
-    print(toSend)
 
+    # print(toSend) 
+    
+    stream = sd.OutputStream(
+        dtype='float32', 
+        device=OUTPUT_DEVICE, 
+        channels=1, 
+        samplerate=48000)
+    
+    stream.start()
+    
     # send the array of strings
     for i in range(0, len(toSend)):
+
+        partString = str(i + 1) + "/" + str(len(toSend)) + ": "
+        print(partString)
+
+        # if len(toSend) > 1:
+        
+        stringToSend = partString + toSend[0]
+        
         # generate audio waveform for string "hello python"
-        waveform = ggwave.encode(toSend[i], protocolId = 1, volume = 20)
-        print("transmitting text " + toSend[i] + "...")
+        # waveform = ggwave.encode(toSend[0], protocolId = 1, volume = 50)
+        waveform = ggwave.encode(stringToSend, protocolId = 1, volume = 50)
+
+        print("transmitting text... " + toSend[i])
+
         # write to the pyaudio stream
-        stream = p.open(format=pyaudio.paFloat32, channels=1, rate=48000, output=True, frames_per_buffer=4096)
-        stream.write(waveform, len(waveform)//4)
+        towrite = np.frombuffer(waveform, 'float32')
+
+        stream.write(towrite)
 
     # close the audio stream
-    stream.stop_stream()
+    stream.stop()
     stream.close()
-    p.terminate()
-    
+
 def receiveGGWave():
-    p = pyaudio.PyAudio()
+    stream = sd.InputStream(
+        dtype='float32', 
+        device=INPUT_DEVICE, 
+        channels=1, 
+        samplerate=48000, 
+        blocksize=1024)
 
-    stream = p.open(format=pyaudio.paFloat32, input_device_index=1, channels=1, rate=48000, input=True, frames_per_buffer=1024)
+    # start the sound decive input stream    
+    stream.start()
 
-    print('listening ... Press Ctrl+C to stop')
+    print('listening ... press Ctrl+C to stop')
+
+    # ggwave instace
     instance = ggwave.init()
 
+    # initialize function to expect three parts
+    msgParts = 3
+    msgNumber = 1
+
+    # array to store the messages 
+    msgs = []
+
     try:
-        while True:
-            data = stream.read(1024, exception_on_overflow=False)
-            res = ggwave.decode(instance, data)
+        # until we've received all parts, call this function
+        while msgNumber < msgParts:
+
+            # get data from the stream
+            data, overflow = stream.read(1024)
+
+            # convert from numpy to bytes  
+            databytes = bytes(data[:, 0])
+
+            # decode the bytes
+            res = ggwave.decode(instance, databytes)
+
+            # if decode is successful
             if (not res is None):
                 try:
                     outputText = res.decode("utf-8")
                     print('received text: ' + res.decode("utf-8"))
 
-                    # successful decode
-                    ggwave.free(instance)
-                    stream.stop_stream()
-                    stream.close()
-                    p.terminate()
+                    # get the message number / parts and contents
+                    msgNumber, msgParts, outputTextClean = getMessagePart(outputText)
 
-                    return outputText
+                    print(msgNumber, msgParts, outputTextClean)
 
-                except:
+                    # append the cleaned output text to the message array
+                    msgs.append(outputTextClean)
+
+                except KeyboardInterrupt:
                     pass
     except KeyboardInterrupt:
         pass
+    
+    # successful decode
+    ggwave.free(instance)
+    stream.stop()
+    stream.close()
 
-def arrayToString(input):
-    output = ""
-    for x in input:
-        output = output + x
-    return output 
+    # concatenate all the message parts into a single string
+    return arrayToString(msgs)
 
 def converseLoop(n_exchange, starterPrompt):
     
@@ -162,66 +245,41 @@ def converseLoop(n_exchange, starterPrompt):
 
     return responses
 
-def converseSingle(n, currentResponses):
+def converseSingle(mode, currentResponses):
     
     responses = []
 
     responses = responses + currentResponses
 
-    prompt = arrayToString(responses)
-
-    print(prompt)
-
-    # switch between model and prompts
-    # if n % 2 == 0:
-    #     model = modelB
-    #     preprompt = "AI2: "
-    #     stop = ["AI1: "]
-    # else:
-    #     model = modelA
-    #     preprompt = "AI1: "
-    #     stop = ["AI2: ", "."]
-
-    model = modelA
-    preprompt = "AI1: "
-    stop = ["AI2: ", "."]
-
-    # add the empty preprompt with newline to the response list
-    responses.append(preprompt + "\n")
-
-    # turn the array of responses into a long string
-    prompt = arrayToString(responses)
-
-    # for modelB use the entire prompt, for modelA only the last two responses 
-    if n % 2 == 0:
-      prompt = arrayToString(responses)
+    # false means we're in receive mode and the plant is asking questions
+    if mode == "send":
+        preprompt = "Ask a question about the following statement: "
+        model = modelSend
     else:
-      prompt = arrayToString(responses[-2] + responses[-1])
+        preprompt = ""
+        model = modelReceive
+
+    prompt = preprompt + responses[-1] + "\n"
     
-    # print("\n** " + model + ": " + prompt + " **\n")
+    print(prompt)
     
     # get the completion from model
     completion = openai.Completion.create(engine=model, prompt=prompt, max_tokens=MAX_TOKENS, stop=stop)
 
     responseString = completion.choices[0].text.strip()
     
-    # add the preprompt to the response and make sure it has a new line 
-    fullResponse = preprompt + responseString + "\n"
+    fullResponse = responseString + "\n"
 
-    # remove the empty preprompt from the list
-    responses.pop()
-    
     # add the formatted string to the list
     responses.append(fullResponse)
     
-    # print(fullResponse)
-
     return responses
 
 def waitForStart():
     print("waiting for start command...")
-    if(receiveGGWave() == "start"):
-        pass
+    while True:
+        if(receiveGGWave() == "start"):
+            break
 
 def rxtxrxTest():
     outputText = receiveGGWave()
@@ -229,19 +287,20 @@ def rxtxrxTest():
     sendGGWave("howdy I'm a raspberry pi")
     outputText = receiveGGWave()
 
+# return a tuple with the mode of the plant and the current state of the sendReceive flag
 def parseArgs():
     if(len(sys.argv) > 1):
         args = sys.argv[1:]
         print(args)
         if(args[0] == "send"):
             print("starting in SEND mode")
-            return True
-        elif(args[0] == "recieve"):
+            return "send", True
+        elif(args[0] == "receive"):
             print("starting in RECEIVE mode")
-            return False
+            return "receive", False
     else:
         print("couldn't parse argument, starting in RECEIVE mode")
-        return False
+        return "receive", False
     
 
 # state machine:
@@ -252,35 +311,55 @@ def parseArgs():
 
 def main(): 
     alsaErrorHandling()
-
-    sendReceive = parseArgs()
     
+    # devices = sd.query_devices(0)
+    # print(devices)
+    # devices = sd.query_devices(1)
+    # print(devices)
+
+    # keep track of whether we start in send or receive mode
+    # initialize the flag for switching between send and receive per the conversation
+    mode, sendReceive = parseArgs()
+
+    # wait for start command
     waitForStart()
 
-    rxtxrxTest()
+    # wait three second before starting
+    time.sleep(3)
 
-    # responses = []
+    # if we're in receive mode first then just start with a blank array
+    responses = []
 
-    # responses = responses + promptArray 
+    # if send mode load a question from the prompt
+    if mode == "send":
+        responses = responses + promptArray 
+        sendGGWave(responses[0])
+        sendReceive = False
 
-    # # sendReceive = True
+    # start the conversation
+    for i in range(0, EXCHANGE_COUNT):
+        
+        if sendReceive == True:
+            # get a response from the API
+            responses = converseSingle(mode, responses)
 
-    # for i in range(0, 5):
+            print("\nsending...\n")
 
-    #     if sendReceive == True:
-    #         responses = converseSingle(i, responses)
-    #         print("\nsending...\n")
-    #         print(responses)
-    #         sendGGWave(responses[-1])
-    #         sendReceive = False
+            # send the most recent response
+            time.sleep(1)
+            sendGGWave(responses[-1])
 
-    #     elif sendReceive == False:
-    #         print("\nreceiving...\n")
-    #         outputText = receiveGGWave()
+            sendReceive = False
 
-    #         responses.append(outputText)
-    #         print(outputText)
-    #         sendReceive = True
+        elif sendReceive == False:
+            print("\nreceiving...\n")
+
+            outputText = receiveGGWave()
+
+            responses.append(outputText)
+            
+            sendReceive = True
+
     
 
 
