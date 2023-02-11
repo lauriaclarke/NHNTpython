@@ -1,10 +1,6 @@
 import ggwave
-import pyaudio
-import requests
-import json
-import re
-import inspect
 import os
+import re
 import sys
 import openai
 from ctypes import *
@@ -12,13 +8,23 @@ import ggwave
 import numpy as np
 import sounddevice as sd
 import time
+import datetime
+from gtts import gTTS
+import audio2numpy as a2n
+# import librosa
+
+
+SHIFT_SEND = 40
+SHIFT_RECEIVE = -30
 
 MAX_TOKENS=200
 MAX_STRING=140
 
+PROTOCOL = 4
+
 # computer settings
-# OUTPUT_DEVICE=25
-# INPUT_DEVICE=25
+# OUTPUT_DEVICE=20
+# INPUT_DEVICE=20
 
 # pi settings
 OUTPUT_DEVICE=0
@@ -30,14 +36,26 @@ EXCHANGE_COUNT=10
 apikey = os.getenv('OPENAI_API_KEY')
 openai.api_key = apikey
 
-modelReceive = "davinci:ft-parsons-school-of-design-2022-11-15-19-36-19"
+# alien aesthetics reading
+# modelReceive = "davinci:ft-parsons-school-of-design-2022-11-15-19-36-19"
+
+# environmental literature
+# modelReceive = "davinci:ft-parsons-school-of-design-2023-01-20-01-37-01"
+
+# latour
+modelReceive = "davinci:ft-parsons-school-of-design-2023-02-06-15-16-50"
+
+# generic models
+# modelReceive = "text-davinci-003"
 modelSend = "text-davinci-003"
-# model = "text-davinci-003"
-    
+   
 stop = ["."]
 
 # promptArray = ["The following conversation is a conversation between two AIs about the nature of human beings.\n", "AI1: Who is a human?\n", "AI2: It really depends who you ask and in which context. Generally, I find the notion of the human is mysterious and sometimes misleading.\n", "AI1: Who do you think has the best answer to such a complicated question?\n"]
+# promptArray = ["Why are humans so mean to plants?\n"]
 promptArray = ["Who is a human?\n"]
+prepromptSend = "Ask a question about the following statement from the perspective of a houseplant: "
+prepromptReceive = "Answer this question from the perspective of a houseplant who hates humans: "
 
 def arrayToString(input):
     output = ""
@@ -110,11 +128,11 @@ def sendGGWave(inputText):
 
         # if len(toSend) > 1:
         
-        stringToSend = partString + toSend[0]
+        stringToSend = partString + toSend[i]
         
         # generate audio waveform for string "hello python"
         # waveform = ggwave.encode(toSend[0], protocolId = 1, volume = 50)
-        waveform = ggwave.encode(stringToSend, protocolId = 1, volume = 50)
+        waveform = ggwave.encode(stringToSend, protocolId = PROTOCOL, volume = 50)
 
         print("transmitting text... " + toSend[i])
 
@@ -122,6 +140,90 @@ def sendGGWave(inputText):
         towrite = np.frombuffer(waveform, 'float32')
 
         stream.write(towrite)
+
+    # close the audio stream
+    stream.stop()
+    stream.close()
+
+def sendGGWaveUT(inputText, pitchShift):
+    # split strings that are too long into chunks of length MAX_STRING characters
+    # TODO: end on word breaks instead of mid-word
+    
+    # print(inputText)
+    # print(len(inputText))
+
+    toSend = []
+    if len(inputText) > MAX_STRING:
+        i = 0
+        while i < len(inputText):
+            i += MAX_STRING
+            toSend.append(inputText[i - MAX_STRING:i])
+    else:
+        toSend.append(inputText)
+
+
+    # print(toSend) 
+    
+    stream = sd.OutputStream(
+        dtype='float32', 
+        device=OUTPUT_DEVICE, 
+        channels=2, 
+        samplerate=48000)
+    
+    stream.start()
+    
+    # send the array of strings
+    for i in range(0, len(toSend)):
+
+        partString = str(i + 1) + "/" + str(len(toSend)) + ": "
+        print(partString)
+
+        # if len(toSend) > 1:
+        
+        stringToSend = partString + toSend[i]
+        
+        # generate audio waveform for encoded text
+        ggwaveWaveform = ggwave.encode(stringToSend, protocolId = PROTOCOL, volume = 50)
+        ggwaveOut = np.frombuffer(ggwaveWaveform, 'float32')
+
+        # encode in voice data
+        ttsWaveform = gTTS(stringToSend)
+        ttsWaveform.save('hello.mp3')
+
+        # adjust sample rate accordingly
+        cmd = "ffmpeg -hide_banner -loglevel error -i hello.mp3 -ar " + str(sampleRateAdjust) + " hello_48k.mp3"
+        os.system(cmd)
+        ttsOut, sampleRate = a2n.open_audio('hello_48k.mp3')
+
+        # remove our files 
+        os.system("rm *.mp3")
+
+        # apply pitch shift
+        # ttsOut = librosa.effects.pitch_shift(ttsOut, sr=48000, n_steps=pitchShift)
+
+        # reformat
+        ttsOut32 = np.frombuffer(ttsOut, 'float32')
+
+
+        # make sure they're the same length
+        print(len(ttsOut32), len(ggwaveOut))
+        if len(ttsOut32) > len(ggwaveOut):
+            ttsOut32 = ttsOut32[0:len(ggwaveOut)]
+        else:
+            zeroArray = np.zeros(len(ggwaveOut) - len(ttsOut32), dtype=np.float32)
+            ttsOut32 = np.append(ttsOut32, zeroArray)
+        
+        # ttsOut32 = np.frombuffer(ttsOut32, 'float32')
+
+        # format the data into an array appropriately
+        finalOutput = [ttsOut32, ggwaveOut]
+        aa = np.array(finalOutput)
+        a = np.ascontiguousarray(aa.T)
+        print(a.shape)
+        print("transmitting text... " + toSend[i])
+
+        # write to the pyaudio stream
+        stream.write(a)
 
     # close the audio stream
     stream.stop()
@@ -253,10 +355,10 @@ def converseSingle(mode, currentResponses):
 
     # false means we're in receive mode and the plant is asking questions
     if mode == "send":
-        preprompt = "Ask a question about the following statement: "
+        preprompt = prepromptSend
         model = modelSend
     else:
-        preprompt = ""
+        preprompt = prepromptReceive
         model = modelReceive
 
     prompt = preprompt + responses[-1] + "\n"
@@ -311,6 +413,11 @@ def parseArgs():
 
 def main(): 
     alsaErrorHandling()
+
+    # create a log file
+    t = datetime.datetime.now()
+    filename = "logs/" + t.strftime("%m_%d_%H_%M_%S") + ".txt"
+    f = open(filename, "w")
     
     # devices = sd.query_devices(0)
     # print(devices)
@@ -332,9 +439,24 @@ def main():
 
     # if send mode load a question from the prompt
     if mode == "send":
+
+        # set the sample rate adjustment based on initial state
+        pitchShift = SHIFT_SEND
+
+        time.sleep(1)
         responses = responses + promptArray 
-        sendGGWave(responses[0])
+
+        if PROTOCOL == 4:
+            sendGGWaveUT(responses[0], sampleRateAdjust)
+        else:
+            sendGGWave(responses[0])
+
+        # write to logfile
+        f.write(responses[0] + "\n")
+
         sendReceive = False
+    else: 
+        pitchShift = SHIFT_RECEIVE
 
     # start the conversation
     for i in range(0, EXCHANGE_COUNT):
@@ -342,12 +464,20 @@ def main():
         if sendReceive == True:
             # get a response from the API
             responses = converseSingle(mode, responses)
+            
+            # give some time to improce cadence
+            time.sleep(1)
 
             print("\nsending...\n")
 
             # send the most recent response
-            time.sleep(1)
-            sendGGWave(responses[-1])
+            if PROTOCOL == 4:
+                sendGGWaveUT(responses[-1], sampleRateAdjust)
+            else:
+                sendGGWave(responses[-1])
+
+            # write to logfile
+            f.write(responses[-1] + "\n")
 
             sendReceive = False
 
@@ -357,10 +487,13 @@ def main():
             outputText = receiveGGWave()
 
             responses.append(outputText)
+
+            # write to logfile
+            f.write(outputText + "\n")
             
             sendReceive = True
 
-    
+    f.close()
 
 
 
